@@ -2,19 +2,40 @@
 
 require('dotenv').config();
 
+// application dependencies
 const express = require('express');
 const app = express();
+//add cors,superagent, and PG database
 const superagent = require('superagent');
 const cors = require('cors');
 const pg = require('pg');
-
 app.use(cors());
+
+// configure environment variables
 const PORT = process.env.PORT || 3000;
 
+//connection to the client
 const client = new pg.Client(process.env.DATABASE_URL);
 client.connect();
+client.on('error', err => console.error(err));
 
+// store locatonID
 let locationID;
+
+// Route
+
+app.get('/location', (req, res) => {
+  getLatLong(req.query.data)
+    .then(location => res.send(location))
+    .catch(err => handleError(err, res));
+});
+
+app.get('/weather', getWeather);
+app.get('/events', getEvents);
+app.get('/yelp',getYelp);
+
+
+//constructor
 
 function Location(query, res) {
   this.search_query = query;
@@ -48,14 +69,19 @@ function Event(event) {
 Event.tableName='events';
 Event.deleteByLocationId=deleteByLocationId;
 
-app.get('/location', (req, res) => {
-  getLatLong(req.query.data)
-    .then(location => res.send(location))
-    .catch(err => handleError(err, res));
-});
 
-app.get('/weather', getWeather);
-app.get('/events', getEvents);
+
+function Yelp(item){
+  this.name=item.name;
+  this.rating=item.rating;
+  this.price=item.price;
+  //   this.phone=item.phone;
+  this.image_url=item.image_url;
+  this.created_at=Date.now();
+}
+Yelp.tableName='yelps';
+Yelp.deleteByLocationId=deleteByLocationId;
+
 
 function getLatLong(query) {
 
@@ -103,6 +129,23 @@ function getEvents(req, res) {
 }
 
 
+function getYelp(request,response){
+  const handler={
+    location: request.query.data,
+    cacheHit: function(result){
+      response.send(result.rows);
+    },
+    cacheMiss: function(){
+      Yelp.getYelpinfo(request.query.data)
+        .then(results=>response.send(results))
+        .catch(console.error);
+    },
+
+  };
+
+  Yelp.findYelp(handler);
+
+}
 
 //query=req.query.data
 function searchDb(tableName){
@@ -198,40 +241,6 @@ function lookupDatabase(sqlStatement,query,res,url){
 
 }
 
-
-
-
-
-app.get('/yelp',getYelp);
-//yelp constructor
-function Yelp(item){
-  this.name=item.name;
-  this.rating=item.rating;
-  this.price=item.price;
-  //   this.phone=item.phone;
-  this.image_url=item.image_url;
-  this.created_at=Date.now();
-}
-Yelp.tableName='yelps';
-Yelp.deleteByLocationId=deleteByLocationId;
-
-function getYelp(request,response){
-  const handler={
-    location: request.query.data,
-    cacheHit: function(result){
-      response.send(result.rows);
-    },
-    cacheMiss: function(){
-      Yelp.getYelpinfo(request.query.data)
-        .then(results=>response.send(results))
-        .catch(console.error);
-    },
-
-  };
-
-  Yelp.findYelp(handler);
-
-}
 
 //save to db
 Yelp.prototype.save=function(id){
