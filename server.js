@@ -15,6 +15,7 @@ app.use(cors());
 const PORT = process.env.PORT || 3000;
 
 //connection to the client
+// Database Setup
 const client = new pg.Client(process.env.DATABASE_URL);
 client.connect();
 client.on('error', err => console.error(err));
@@ -33,7 +34,21 @@ app.get('/location', (req, res) => {
 app.get('/weather', getWeather);
 app.get('/events', getEvents);
 app.get('/yelp',getYelp);
+app.get('/movies',getMovies);
 
+
+
+
+// Error handler
+function handleError(err, res) {
+
+  console.error(err);
+  if (res) res.status(500).send('Status: 500 - Internal Server Error');
+}
+
+
+// Make sure the server is listening for requests
+app.listen(PORT, () => console.log(`listening on port ${PORT}`));
 
 //constructor
 
@@ -53,10 +68,7 @@ function Weather(day) {
 Weather.tableName='weather';
 Weather.deleteByLocationId=deleteByLocationId;
 
-function deleteByLocationId(table,city){
-  const SQL=`DELETE from ${table} WHERE location_id=${city};`;
-  return client.query(SQL);
-}
+
 
 function Event(event) {
   this.tableName='events';
@@ -83,6 +95,29 @@ Yelp.tableName='yelps';
 Yelp.deleteByLocationId=deleteByLocationId;
 
 
+function Movie(item){
+  this.title=item.title;
+  this.overview=item.overview;
+  this.average_votes=item.vote_average;
+  this.total_votes=item.vote_count;
+  this.image_url='https://image.tmdb.org/t/p/w370_and_h556_bestv2/' + item.poster_path;
+  this.release_date=item.release_date;
+  this.popularity=item.popularity;
+  this.released_on=item.release_data;
+  this.created_at=Date.now();
+}
+
+Movie.tableName='movies';
+Movie.deleteByLocationId=deleteByLocationId;
+
+
+// Clear the results for a location if they are stale
+function deleteByLocationId(table,city){
+  const SQL=`DELETE from ${table} WHERE location_id=${city};`;
+  return client.query(SQL);
+}
+
+// Look for the results in the database
 function getLatLong(query) {
 
   let sqlStatement = 'SELECT * FROM locations WHERE search_query = $1';
@@ -293,12 +328,3 @@ Yelp.getYelpinfo=function(location){
 };
 
 
-
-
-function handleError(err, res) {
-
-  console.error(err);
-  if (res) res.status(500).send('Status: 500 - Internal Server Error');
-}
-
-app.listen(PORT, () => console.log(`listening on port ${PORT}`));
