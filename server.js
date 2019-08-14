@@ -182,6 +182,23 @@ function getYelp(request,response){
 
 }
 
+
+function getMovies(request,response){
+  const handler={
+    location: request.query.data,
+    cacheHit: function(result){
+      response.send(result.rows);
+    },
+    cacheMiss: function(){
+      Movie.getMovieinfo(request.query.data)
+        .then(results=>response.send(results))
+        .catch(console.error);
+    },
+  };
+  Movie.findMovie(handler);
+}
+
+
 //query=req.query.data
 function searchDb(tableName){
   let sqlStatement='';
@@ -327,4 +344,49 @@ Yelp.getYelpinfo=function(location){
 
 };
 
+
+Movie.prototype.save=function(id){
+  const SQL = `INSERT INTO movies (title,overview,average_votes,total_votes,image_url,release_date,popularity,released_on,created_at,location_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10);`;
+  const values=Object.values(this);
+  values.push(id);
+  client.query(SQL,values);
+};
+
+
+
+Movie.findMovie=function(handler){
+  const SQL= `SELECT * FROM movies WHERE location_id=$1`;
+  client.query(SQL,[handler.location.id])
+    .then(result=>{
+      if(result.rowCount>0){
+
+        let ageOfResultsInMinutes = (Date.now() - result.rows[0].created_at) / (1000 * 60);
+        if (ageOfResultsInMinutes > 1) {
+          Movie.deleteByLocationId('movies', handler.location.id);
+          handler.cacheMiss();
+        }
+
+        else{ handler.cacheHit(result);}
+
+      }
+      else{
+        handler.cacheMiss();
+      }
+    });
+};
+
+
+
+Movie.getMovieinfo=function(location){
+  const url= `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_API_KEY}&query=${location.search_query}`;
+  return superagent.get(url)
+    .then(resultupdate=>{
+      const movieSummaries=resultupdate.body.results.map(item=>{
+        const summary =new Movie(item);
+        summary.save(location.id);
+        return summary;
+      });
+      return movieSummaries;
+    });
+};
 
